@@ -62,14 +62,24 @@ def get_embedder():
     return SentenceTransformer("all-MiniLM-L6-v2")
 
 
+# Smaller 6-layer DistilBART (~0.9 GB) so it fits Streamlit Cloud's free RAM.
+# For better quality on a bigger machine set env var SATN_MODEL=sshleifer/distilbart-cnn-12-6
+import os
+MODEL_NAME = os.environ.get("SATN_MODEL", "sshleifer/distilbart-cnn-6-6")
+
+
 @lru_cache(maxsize=1)
 def get_summarizer():
-    """Load DistilBART directly (works on transformers v4 and v5; the old
+    """Load the model directly (works on transformers v4 and v5; the old
     pipeline("summarization") was removed in transformers v5)."""
+    import torch
     from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-    name = "sshleifer/distilbart-cnn-12-6"
-    tok = AutoTokenizer.from_pretrained(name)
-    model = AutoModelForSeq2SeqLM.from_pretrained(name).eval()
+    torch.set_num_threads(2)
+    tok = AutoTokenizer.from_pretrained(MODEL_NAME)
+    model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME, low_cpu_mem_usage=True).eval()
+    # avoid the "both max_new_tokens and max_length" warning
+    model.generation_config.max_length = None
+    model.generation_config.min_length = 0
     return tok, model
 
 
@@ -77,9 +87,9 @@ def _generate(text, max_new, min_new):
     import torch
     tok, model = get_summarizer()
     inputs = tok(text, return_tensors="pt", truncation=True, max_length=1024)
-    with torch.no_grad():
+    with torch.inference_mode():
         ids = model.generate(**inputs, max_new_tokens=max_new, min_new_tokens=min_new,
-                             num_beams=4, length_penalty=2.0,
+                             num_beams=2, length_penalty=2.0,
                              no_repeat_ngram_size=3, early_stopping=True)
     return tok.decode(ids[0], skip_special_tokens=True).strip()
 
