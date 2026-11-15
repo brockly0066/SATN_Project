@@ -64,8 +64,24 @@ def get_embedder():
 
 @lru_cache(maxsize=1)
 def get_summarizer():
-    from transformers import pipeline
-    return pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
+    """Load DistilBART directly (works on transformers v4 and v5; the old
+    pipeline("summarization") was removed in transformers v5)."""
+    from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+    name = "sshleifer/distilbart-cnn-12-6"
+    tok = AutoTokenizer.from_pretrained(name)
+    model = AutoModelForSeq2SeqLM.from_pretrained(name).eval()
+    return tok, model
+
+
+def _generate(text, max_new, min_new):
+    import torch
+    tok, model = get_summarizer()
+    inputs = tok(text, return_tensors="pt", truncation=True, max_length=1024)
+    with torch.no_grad():
+        ids = model.generate(**inputs, max_new_tokens=max_new, min_new_tokens=min_new,
+                             num_beams=4, length_penalty=2.0,
+                             no_repeat_ngram_size=3, early_stopping=True)
+    return tok.decode(ids[0], skip_special_tokens=True).strip()
 
 
 # --------------------------------------------------------------------------
@@ -141,21 +157,17 @@ def _chunks(sentences, max_words=450):
 
 
 def abstractive_summary(sentences, detail="medium"):
-    summ = get_summarizer()
     cfg = {"short": (40, 90), "medium": (60, 150), "detailed": (90, 220)}[detail]
     parts = []
     for ch in _chunks(sentences):
         n = len(ch.split())
         mx = min(cfg[1], max(30, int(n * 0.6)))
-        mn = min(cfg[0], mx - 10)
-        out = summ(ch, max_length=mx, min_length=max(10, mn),
-                   do_sample=False, truncation=True)[0]["summary_text"]
-        parts.append(out.strip())
+        mn = max(10, min(cfg[0], mx - 10))
+        parts.append(_generate(ch, mx, mn))
     joined = " ".join(parts)
     # second pass if many chunks -> coherent single summary
     if len(parts) > 3:
-        joined = summ(joined, max_length=cfg[1] + 60, min_length=cfg[0],
-                      do_sample=False, truncation=True)[0]["summary_text"]
+        joined = _generate(joined, cfg[1] + 60, cfg[0])
     return joined
 
 
