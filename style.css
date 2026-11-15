@@ -1,0 +1,23 @@
+.hero {
+  background: linear-gradient(135deg, #6C5CE7 0%, #00B8D9 100%);
+  padding: 2rem 2.2rem; border-radius: 18px; margin-bottom: 1.5rem;
+  box-shadow: 0 10px 30px rgba(108,92,231,.35);
+}
+.hero h1 { color: #fff; margin: 0; font-size: 2.2rem; }
+.hero p  { color: #eef; margin: .4rem 0 0; font-size: 1.05rem; }
+.card {
+  background: #181C30; border: 1px solid #2A2F4D; border-radius: 14px;
+  padding: 1.2rem 1.4rem; line-height: 1.7; font-size: 1.05rem;
+}
+.chip {
+  display: inline-block; background: #2A2F4D; color: #cfd3ff;
+  padding: .3rem .8rem; margin: .2rem; border-radius: 999px; font-size: .9rem;
+  border: 1px solid #3b4170;
+}
+.stat { text-align:center; background:#181C30; border:1px solid #2A2F4D;
+        border-radius:14px; padding:1rem; }
+.stat b { font-size:1.8rem; color:#00B8D9; display:block; }
+div.stButton > button {
+  background: linear-gradient(135deg,#6C5CE7,#00B8D9); color:#fff; border:0;
+  border-radius:10px; padding:.6rem 1.6rem; font-weight:600;
+}
