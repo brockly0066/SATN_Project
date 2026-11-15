@@ -91,7 +91,12 @@ def _generate(text, max_new, min_new):
         ids = model.generate(**inputs, max_new_tokens=max_new, min_new_tokens=min_new,
                              num_beams=2, length_penalty=2.0,
                              no_repeat_ngram_size=3, early_stopping=True)
-    return tok.decode(ids[0], skip_special_tokens=True).strip()
+    out = tok.decode(ids[0], skip_special_tokens=True,
+                     clean_up_tokenization_spaces=True).strip()
+    out = re.sub(r"\s+([.,;:!?])", r"\1", out)
+    if out and out[-1] not in ".!?" and any(p in out for p in ".!?"):
+        out = out[: max(out.rfind("."), out.rfind("!"), out.rfind("?")) + 1]
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -133,10 +138,12 @@ def semantic_scores(sents, alpha=0.5, beta=0.4, gamma=0.1):
 def select_salient(sents, ratio=0.3, max_sents=40, lam=0.7):
     """Pick salient sentences with MMR to minimise redundancy,
        then restore original order for coherence."""
-    if len(sents) <= 3:
+    # Short/medium documents: keep every sentence so no section (e.g. the
+    # introduction) is lost; salience selection only trims long documents.
+    if len(sents) <= 15:
         return list(range(len(sents)))
     score, emb = semantic_scores(sents)
-    k = max(3, min(max_sents, int(len(sents) * ratio)))
+    k = max(10, min(max_sents, int(len(sents) * ratio)))
     chosen, candidates = [], list(range(len(sents)))
     while candidates and len(chosen) < k:
         best, best_val = None, -1e9
@@ -167,12 +174,12 @@ def _chunks(sentences, max_words=450):
 
 
 def abstractive_summary(sentences, detail="medium"):
-    cfg = {"short": (40, 90), "medium": (60, 150), "detailed": (90, 220)}[detail]
+    cfg = {"short": (30, 90), "medium": (50, 150), "detailed": (80, 220)}[detail]
     parts = []
     for ch in _chunks(sentences):
-        n = len(ch.split())
-        mx = min(cfg[1], max(30, int(n * 0.6)))
-        mn = max(10, min(cfg[0], mx - 10))
+        n_tok = int(len(ch.split()) * 1.3)              # rough token count
+        mx = min(cfg[1], max(40, int(n_tok * 0.6)))
+        mn = max(10, min(cfg[0], int(mx * 0.5)))
         parts.append(_generate(ch, mx, mn))
     joined = " ".join(parts)
     # second pass if many chunks -> coherent single summary
