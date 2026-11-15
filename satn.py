@@ -188,6 +188,24 @@ def abstractive_summary(sentences, detail="medium"):
     return joined
 
 
+def summarize_by_paragraph(text, detail="medium"):
+    """For short/medium documents: summarize each paragraph separately so every
+    section (introduction, body, conclusion...) is represented in the result.
+    Returns None if the text is not suitable (falls back to the global method)."""
+    paras = [p.strip() for p in re.split(r"\n+", text) if len(p.split()) >= 15]
+    total = sum(len(p.split()) for p in paras)
+    if not (2 <= len(paras) <= 12) or total > 1200:
+        return None
+    factor = {"short": 0.3, "medium": 0.45, "detailed": 0.65}[detail]
+    out = []
+    for p in paras:
+        n_tok = int(len(p.split()) * 1.3)
+        mx = min(150, max(30, int(n_tok * factor)))
+        mn = max(10, int(mx * 0.5))
+        out.append(_generate(p, mx, mn))
+    return " ".join(out)
+
+
 # --------------------------------------------------------------------------
 # 5. Knowledge extraction
 # --------------------------------------------------------------------------
@@ -247,7 +265,8 @@ def run_satn(text: str, ratio=0.3, detail="medium"):
     return {
         "n_sentences": len(sents),
         "salient_sentences": salient,                       # extractive view
-        "abstractive_summary": abstractive_summary(salient, detail),
+        "abstractive_summary": (summarize_by_paragraph(text, detail)
+                                or abstractive_summary(salient, detail)),
         "knowledge": extract_knowledge(text),
     }
 
